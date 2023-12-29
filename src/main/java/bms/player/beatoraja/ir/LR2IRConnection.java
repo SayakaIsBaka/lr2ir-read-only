@@ -155,6 +155,8 @@ public class LR2IRConnection implements IRConnection {
                 return rc.create(false, "Internal Exception", new IRScoreData[0]);
             }
         }
+        if (model.md5.isEmpty())
+            return rc.create(false, "BMSON chart", new IRScoreData[0]);
         LR2IRSongData lr2IRSongData = new LR2IRSongData(model.md5, "114328");
         try {
             String res = makePOSTRequest("/getrankingxml.cgi", lr2IRSongData.toUrlEncodedForm());
