@@ -1,7 +1,6 @@
 package bms.player.beatoraja.ir;
 
 import bms.player.beatoraja.Config;
-import bms.player.beatoraja.ScoreData;
 import bms.player.beatoraja.ScoreDatabaseAccessor;
 import bms.player.beatoraja.song.SQLiteSongDatabaseAccessor;
 import bms.player.beatoraja.song.SongDatabaseAccessor;
@@ -54,47 +53,6 @@ public class LR2IRConnection implements IRConnection {
             e.printStackTrace();
         }
         return null;
-    }
-
-    private static IRScoreData[] lr2ScoreDataToBeatoraja(Ranking ranking, IRChartData model) {
-        List<Score> scores = ranking.getScore();
-        List<IRScoreData> res = new ArrayList<>();
-        for (Score s : scores) {
-            ScoreData tmp = new ScoreData(model.mode);
-            tmp.setSha256(model.sha256);
-            tmp.setPlayer(s.getName());
-            tmp.setClear(s.getBeatorajaClear());
-            tmp.setNotes(s.getNotes());
-            tmp.setCombo(s.getCombo());
-            tmp.setEpg(s.getPg());
-            tmp.setEgr(s.getGr());
-            tmp.setMinbp(s.getMinbp());
-            res.add(new IRScoreData(tmp));
-        }
-        /*if (lastScoreData != null && lastChart != null && lastChart.sha256.equals(model.sha256)) {
-            System.out.println(lastScoreData.player);
-            ScoreData tmp2 = new ScoreData(model.mode);
-            tmp2.setSha256(model.sha256);
-            tmp2.setPlayer(null);
-            tmp2.setClear(lastScoreData.clear.id);
-            tmp2.setNotes(lastScoreData.notes);
-            tmp2.setCombo(lastScoreData.maxcombo);
-            tmp2.setEpg(lastScoreData.epg);
-            tmp2.setLpg(lastScoreData.lpg);
-            tmp2.setEgr(lastScoreData.egr);
-            tmp2.setLgr(lastScoreData.lgr);
-            tmp2.setMinbp(lastScoreData.minbp);
-            res.add(new IRScoreData(tmp2));
-            lastScoreData = null;
-            lastChart = null;
-        } else*/ if (scoredb != null) {
-            ScoreData s = scoredb.getScoreData(model.sha256, model.hasUndefinedLN ? model.lntype : 0);
-            if (s != null) {
-                s.setPlayer(null);
-                res.add(new IRScoreData(s));
-            }
-        }
-        return res.toArray(new IRScoreData[0]);
     }
 
     private String makePOSTRequest(String uri, String data) {
@@ -181,7 +139,7 @@ public class LR2IRConnection implements IRConnection {
 
     public IRResponse<IRTableData[]> getTableDatas() {
         ResponseCreator<IRTableData[]> rc = new ResponseCreator<>();
-        return rc.create(false, "Unimplemented.", new IRTableData[0]);
+        return rc.create(false, "Table loading unimplemented", new IRTableData[0]);
     }
 
     public IRResponse<IRScoreData[]> getPlayData(IRPlayerData irpd, IRChartData model) {
@@ -201,9 +159,9 @@ public class LR2IRConnection implements IRConnection {
         try {
             String res = makePOSTRequest("/getrankingxml.cgi", lr2IRSongData.toUrlEncodedForm());
             Ranking ranking = (Ranking)convertXMLToObject(res.substring(1).replace("<lastupdate></lastupdate>", ""), Ranking.class);
-            IRScoreData[] scoreData = lr2ScoreDataToBeatoraja(ranking, model);
+            IRScoreData[] scoreData = ranking.toBeatorajaScoreData(model, scoredb);
             System.out.println("Retrieved data from LR2IR");
-            return rc.create(true, "Score", scoreData);
+            return rc.create(true, "Score Data", scoreData);
         } catch (Exception e) {
             e.printStackTrace();
             return rc.create(false, "Internal Exception", new IRScoreData[0]);
@@ -212,7 +170,7 @@ public class LR2IRConnection implements IRConnection {
 
     public IRResponse<IRScoreData[]> getCoursePlayData(IRPlayerData irpd, IRCourseData course) {
         ResponseCreator<IRScoreData[]> rc = new ResponseCreator<>();
-        return rc.create(false, "Unimplemented.", new IRScoreData[0]);
+        return rc.create(false, "Course Play unimplemented", new IRScoreData[0]);
     }
 
     public String getSongURL(IRChartData song) {
