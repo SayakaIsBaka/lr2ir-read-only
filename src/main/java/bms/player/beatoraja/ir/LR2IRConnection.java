@@ -1,7 +1,10 @@
 package bms.player.beatoraja.ir;
 
 import bms.model.Mode;
+import bms.player.beatoraja.Config;
+import bms.player.beatoraja.MainController;
 import bms.player.beatoraja.ScoreData;
+import bms.player.beatoraja.ScoreDatabaseAccessor;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -12,6 +15,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +28,7 @@ public class LR2IRConnection implements IRConnection {
 
     private static IRScoreData lastScoreData = null;
     private static IRChartData lastChart = null;
+    private static ScoreDatabaseAccessor scoredb = null;
 
     private static Ranking convertXMLToObject(String xml) {
         try {
@@ -37,12 +42,12 @@ public class LR2IRConnection implements IRConnection {
         return null;
     }
 
-    private static IRScoreData[] lr2ScoreDataToBeatoraja(Ranking ranking, Mode mode, String songHash) {
+    private static IRScoreData[] lr2ScoreDataToBeatoraja(Ranking ranking, IRChartData model) {
         List<Score> scores = ranking.getScore();
         List<IRScoreData> res = new ArrayList<>();
         for (Score s : scores) {
-            ScoreData tmp = new ScoreData(mode);
-            tmp.setSha256(songHash);
+            ScoreData tmp = new ScoreData(model.mode);
+            tmp.setSha256(model.sha256);
             tmp.setPlayer(s.getName());
             tmp.setClear(s.getBeatorajaClear());
             tmp.setNotes(s.getNotes());
@@ -52,10 +57,10 @@ public class LR2IRConnection implements IRConnection {
             tmp.setMinbp(s.getMinbp());
             res.add(new IRScoreData(tmp));
         }
-        if (lastScoreData != null && lastChart != null && lastChart.sha256.equals(songHash)) {
+        /*if (lastScoreData != null && lastChart != null && lastChart.sha256.equals(model.sha256)) {
             System.out.println(lastScoreData.player);
-            ScoreData tmp2 = new ScoreData(mode);
-            tmp2.setSha256(songHash);
+            ScoreData tmp2 = new ScoreData(model.mode);
+            tmp2.setSha256(model.sha256);
             tmp2.setPlayer(null);
             tmp2.setClear(lastScoreData.clear.id);
             tmp2.setNotes(lastScoreData.notes);
@@ -68,6 +73,10 @@ public class LR2IRConnection implements IRConnection {
             res.add(new IRScoreData(tmp2));
             lastScoreData = null;
             lastChart = null;
+        } else*/ if (scoredb != null) {
+            ScoreData s = scoredb.getScoreData(model.sha256, model.hasUndefinedLN ? model.lntype : 0);
+            s.setPlayer(null);
+            res.add(new IRScoreData(s));
         }
         return res.toArray(new IRScoreData[0]);
     }
@@ -101,6 +110,13 @@ public class LR2IRConnection implements IRConnection {
     }
 
     public IRResponse<IRPlayerData> login(String id, String pass) {
+        Config c = Config.read();
+        try {
+            scoredb = new ScoreDatabaseAccessor(c.getPlayerpath() + File.separatorChar + c.getPlayername() + File.separatorChar + "score.db");
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            System.err.println("Error opening score.db, shown ranking will not take PB into account");
+        }
         ResponseCreator<IRPlayerData> rc = new ResponseCreator<>();
         return rc.create(true, "It worked!", new IRPlayerData(id, id, ""));
     }
@@ -137,7 +153,7 @@ public class LR2IRConnection implements IRConnection {
         try {
             String res = makePOSTRequest("/getrankingxml.cgi", lr2IRSongData.toUrlEncodedForm());
             Ranking ranking = convertXMLToObject(res.substring(1).replace("<lastupdate></lastupdate>", ""));
-            IRScoreData[] scoreData = lr2ScoreDataToBeatoraja(ranking, model.mode, model.sha256);
+            IRScoreData[] scoreData = lr2ScoreDataToBeatoraja(ranking, model);
             System.out.println("Retrieved data from LR2IR");
             return rc.create(true, "Score", scoreData);
         } catch (Exception e) {
