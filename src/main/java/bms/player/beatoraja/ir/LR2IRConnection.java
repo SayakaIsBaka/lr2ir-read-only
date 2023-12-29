@@ -3,6 +3,8 @@ package bms.player.beatoraja.ir;
 import bms.player.beatoraja.Config;
 import bms.player.beatoraja.ScoreData;
 import bms.player.beatoraja.ScoreDatabaseAccessor;
+import bms.player.beatoraja.song.SQLiteSongDatabaseAccessor;
+import bms.player.beatoraja.song.SongDatabaseAccessor;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import org.apache.http.NameValuePair;
@@ -38,15 +40,16 @@ public class LR2IRConnection implements IRConnection {
     private static IRScoreData lastScoreData = null;
     private static IRChartData lastChart = null;
     private static ScoreDatabaseAccessor scoredb = null;
+    private static SongDatabaseAccessor songdb = null;
     private static String userId = "";
     private static Document myPage = null;
 
-    private static Ranking convertXMLToObject(String xml) {
+    private static Object convertXMLToObject(String xml, Class c) {
         try {
             XmlMapper xmlMapper = new XmlMapper();
             xmlMapper.configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
-            Ranking ranking = xmlMapper.readValue(xml, Ranking.class);
-            return ranking;
+            Object res = xmlMapper.readValue(xml, c);
+            return res;
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -86,8 +89,10 @@ public class LR2IRConnection implements IRConnection {
             lastChart = null;
         } else*/ if (scoredb != null) {
             ScoreData s = scoredb.getScoreData(model.sha256, model.hasUndefinedLN ? model.lntype : 0);
-            s.setPlayer(null);
-            res.add(new IRScoreData(s));
+            if (s != null) {
+                s.setPlayer(null);
+                res.add(new IRScoreData(s));
+            }
         }
         return res.toArray(new IRScoreData[0]);
     }
@@ -124,6 +129,7 @@ public class LR2IRConnection implements IRConnection {
         Config c = Config.read();
         try {
             scoredb = new ScoreDatabaseAccessor(c.getPlayerpath() + File.separatorChar + c.getPlayername() + File.separatorChar + "score.db");
+            songdb = new SQLiteSongDatabaseAccessor(c.getSongpath(), c.getBmsroot());
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
             System.err.println("Error opening score.db, shown ranking will not take PB into account");
@@ -180,15 +186,21 @@ public class LR2IRConnection implements IRConnection {
 
     public IRResponse<IRScoreData[]> getPlayData(IRPlayerData irpd, IRChartData model) {
         ResponseCreator<IRScoreData[]> rc = new ResponseCreator<>();
-        if (irpd != null) {
-            System.out.println(irpd.id);
-            System.out.println(irpd.name);
-            return rc.create(false, "User playData not implemented yet", new IRScoreData[0]);
+        if (irpd != null) { // Rival loading
+            try {
+                String res = makePOSTRequest("/getplayerxml.cgi", "id=" + irpd.id + "&lastupdate=");
+                ScoreList scoreList = (ScoreList) convertXMLToObject(res.substring(1).replace("<rivalname>" + irpd.name + "</rivalname>", ""), ScoreList.class);
+                IRScoreData[] scoreData = scoreList.toBeatorajaScoreData(songdb, irpd.name);
+                return rc.create(true, "Rival Data", scoreData);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return rc.create(false, "Internal Exception", new IRScoreData[0]);
+            }
         }
         LR2IRSongData lr2IRSongData = new LR2IRSongData(model.md5, "114328");
         try {
             String res = makePOSTRequest("/getrankingxml.cgi", lr2IRSongData.toUrlEncodedForm());
-            Ranking ranking = convertXMLToObject(res.substring(1).replace("<lastupdate></lastupdate>", ""));
+            Ranking ranking = (Ranking)convertXMLToObject(res.substring(1).replace("<lastupdate></lastupdate>", ""), Ranking.class);
             IRScoreData[] scoreData = lr2ScoreDataToBeatoraja(ranking, model);
             System.out.println("Retrieved data from LR2IR");
             return rc.create(true, "Score", scoreData);
