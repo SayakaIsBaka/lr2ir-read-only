@@ -14,7 +14,7 @@ An LR2IR read-only IR library for beatoraja.
 - IR score submission
 
 ## Usage
-- Download the latest release from the [Releases page](github.com/SayakaIsBaka/lr2ir-read-only/releases)
+- Download the latest release from the [Releases page](https://github.com/SayakaIsBaka/lr2ir-read-only/releases)
 - Put the downloaded JAR file into beatoraja's `ir` folder
 - On beatoraja's configuration, put your LR2IR ID as the User ID (eg. `12345`) and anything as the password (eg. `test`). The password field is never used since LR2IR is only being accessed as read-only.
 
