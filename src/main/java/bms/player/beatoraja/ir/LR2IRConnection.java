@@ -1,23 +1,32 @@
 package bms.player.beatoraja.ir;
 
-import bms.model.Mode;
 import bms.player.beatoraja.Config;
-import bms.player.beatoraja.MainController;
 import bms.player.beatoraja.ScoreData;
 import bms.player.beatoraja.ScoreDatabaseAccessor;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class LR2IRConnection implements IRConnection {
     public static final String NAME = "LR2IR Read Only";
@@ -29,6 +38,8 @@ public class LR2IRConnection implements IRConnection {
     private static IRScoreData lastScoreData = null;
     private static IRChartData lastChart = null;
     private static ScoreDatabaseAccessor scoredb = null;
+    private static String userId = "";
+    private static Document myPage = null;
 
     private static Ranking convertXMLToObject(String xml) {
         try {
@@ -117,8 +128,16 @@ public class LR2IRConnection implements IRConnection {
             e.printStackTrace();
             System.err.println("Error opening score.db, shown ranking will not take PB into account");
         }
+        userId = id;
         ResponseCreator<IRPlayerData> rc = new ResponseCreator<>();
-        return rc.create(true, "It worked!", new IRPlayerData(id, id, ""));
+        try {
+            myPage = Jsoup.connect("http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=mypage&playerid=" + id).get();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return rc.create(false, "Error getting myPage, invalid user ID?", null);
+        }
+        String name = myPage.selectXpath("//table[1]/tbody/tr[1]/td").text();
+        return rc.create(true, "Using user " + name, new IRPlayerData(id, name, ""));
     }
 
     public IRResponse<Object> sendPlayData(IRChartData model, IRScoreData score) {
@@ -135,7 +154,23 @@ public class LR2IRConnection implements IRConnection {
 
     public IRResponse<IRPlayerData[]> getRivals() {
         ResponseCreator<IRPlayerData[]> rc = new ResponseCreator<>();
-        return rc.create(false, "Unimplemented.", new IRPlayerData[0]);
+        Elements r = myPage.selectXpath("//table[1]/tbody/tr[last()]/td/a");
+        List<IRPlayerData> res = new ArrayList<>();
+        for (Element e : r) {
+            String name = e.text();
+            String url = e.attr("href");
+            String id = "";
+            try {
+                List<NameValuePair> params = URLEncodedUtils.parse(new URI(url), Charset.forName("SHIFT-JIS"));
+                id = params.stream().collect(Collectors.toMap(NameValuePair::getName, NameValuePair::getValue)).get("playerid");
+            } catch (URISyntaxException ex) {
+                throw new RuntimeException(ex);
+            }
+            System.out.println("Rival: " + name);
+            System.out.println("ID: " + id);
+            res.add(new IRPlayerData(id, name, ""));
+        }
+        return rc.create(true, "Successfully parsed rivals", res.toArray(new IRPlayerData[0]));
     }
 
     public IRResponse<IRTableData[]> getTableDatas() {
@@ -144,11 +179,12 @@ public class LR2IRConnection implements IRConnection {
     }
 
     public IRResponse<IRScoreData[]> getPlayData(IRPlayerData irpd, IRChartData model) {
+        ResponseCreator<IRScoreData[]> rc = new ResponseCreator<>();
         if (irpd != null) {
             System.out.println(irpd.id);
             System.out.println(irpd.name);
+            return rc.create(false, "User playData not implemented yet", new IRScoreData[0]);
         }
-        ResponseCreator<IRScoreData[]> rc = new ResponseCreator<>();
         LR2IRSongData lr2IRSongData = new LR2IRSongData(model.md5, "114328");
         try {
             String res = makePOSTRequest("/getrankingxml.cgi", lr2IRSongData.toUrlEncodedForm());
