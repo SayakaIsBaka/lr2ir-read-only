@@ -34,7 +34,12 @@ public class ScoreList {
         List<IRScoreData> res = new ArrayList<>();
         SongData[] sdata = songdb.getSongDatas(scores.stream().map(ScoreRival::getHash).toArray(String[]::new));
         for (ScoreRival s : scores) {
-            SongData sd = Arrays.stream(sdata).filter(x -> x.getMd5().equals(s.getHash())).findAny().orElse(null);
+            SongData sd = null;
+            try {
+                sd = Arrays.stream(sdata).filter(x -> x.getMd5().equals(s.getHash())).findAny().orElse(null);
+            } catch (Exception e) {
+                continue;
+            }
             if (sd == null)
                 continue;
             ScoreData tmp = new ScoreData(getEnumValue(sd.getMode()));
