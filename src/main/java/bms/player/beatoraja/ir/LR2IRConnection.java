@@ -79,11 +79,11 @@ public class LR2IRConnection implements IRConnection {
         }
     }
 
-    public IRResponse<IRPlayerData> register(String id, String pass, String name) {
+    public IRResponse<IRPlayerData> register(IRAccount account) {
         return null;
     }
 
-    public IRResponse<IRPlayerData> login(String id, String pass) {
+    public IRResponse<IRPlayerData> login(IRAccount account) {
         Config c = Config.read();
         try {
             scoredb = new ScoreDatabaseAccessor(c.getPlayerpath() + File.separatorChar + c.getPlayername() + File.separatorChar + "score.db");
@@ -92,16 +92,16 @@ public class LR2IRConnection implements IRConnection {
             e.printStackTrace();
             System.err.println("Error opening score.db, shown ranking will not take PB into account");
         }
-        userId = id;
+        userId = account.id;
         ResponseCreator<IRPlayerData> rc = new ResponseCreator<>();
         try {
-            myPage = Jsoup.connect("http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=mypage&playerid=" + id).get();
+            myPage = Jsoup.connect("http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=mypage&playerid=" + account.id).get();
         } catch (IOException e) {
             e.printStackTrace();
             return rc.create(false, "Error getting myPage, invalid user ID?", null);
         }
         String name = myPage.selectXpath("//table[1]/tbody/tr[1]/td").text();
-        return rc.create(true, "Using user " + name, new IRPlayerData(id, name, ""));
+        return rc.create(true, "Using user " + name, new IRPlayerData(account.id, name, ""));
     }
 
     public IRResponse<Object> sendPlayData(IRChartData model, IRScoreData score) {
