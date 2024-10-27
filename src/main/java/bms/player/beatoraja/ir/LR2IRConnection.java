@@ -101,7 +101,7 @@ public class LR2IRConnection implements IRConnection {
             return rc.create(false, "Error getting myPage, invalid user ID?", null);
         }
         String name = myPage.selectXpath("//table[1]/tbody/tr[1]/td").text();
-        return rc.create(true, "Using user " + name, new IRPlayerData(account.id, account.name, ""));
+        return rc.create(true, "Using user " + name, new IRPlayerData(account.id, name, ""));
     }
 
     public IRResponse<Object> sendPlayData(IRChartData model, IRScoreData score) {
